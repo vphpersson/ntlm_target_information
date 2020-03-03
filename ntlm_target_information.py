@@ -42,7 +42,9 @@ class ParseURLAction(Action):
         elif scheme in {'ldap', 'ldaps'}:
             setattr(namespace, 'mode', TargetInformationMode.LDAP)
         else:
-            return parser.error(message=f'Unsupported scheme: "{scheme}". Supported schemes: {", ".join(sorted(SUPPORTED_SCHEMES))}.')
+            return parser.error(
+                message=f'Unsupported scheme: "{scheme}". Supported schemes: {", ".join(sorted(SUPPORTED_SCHEMES))}.'
+            )
 
         setattr(namespace, 'url', url)
 
@@ -59,26 +61,12 @@ def get_parser() -> ArgumentParser:
         action=ParseURLAction
     )
 
-    # HTTP group arguments.
-
-    http_group = parser.add_argument_group('http')
-
-    http_group.add_argument(
+    parser.add_argument(
         '-w', '--timeout',
         help='The number of seconds to wait before timing out.',
         type=int,
         default=5
     )
-
-    # LDAP group arguments.
-
-    ldap_group = parser.add_argument_group('ldap')
-
-    # ldap_ad_parser = ldap_group.add_parser(
-    #     name=TargetInformationMode.LDAP.name.lower()
-    #     # parents=[LdapServerAddressParser()]
-    # )
-    # ldap_ad_parser.set_defaults(mode=TargetInformationMode.LDAP)
 
     return parser
 

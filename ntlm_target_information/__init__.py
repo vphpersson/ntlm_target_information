@@ -4,6 +4,9 @@ from functools import cached_property
 
 from ntlm.structures.av_pair import AVPairSequence, AvId, AvFlags, SingleHostData, EOLAVPair
 
+# TODO: Consider whether this should be here or in the NTLM library, replacing the `ChallengeMessage.target_info`.
+# TODO: Consider whether to use `cached_property`. The provided `AVPairSequence` is mutable.
+
 
 class NTLMTargetInformation:
     def __init__(self, av_pairs: AVPairSequence):
