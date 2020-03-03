@@ -1,64 +1,61 @@
-from base64 import b64encode, b64decode
-from re import compile as re_compile
-from contextlib import contextmanager
+from typing import Optional, Union
+from datetime import datetime
+from functools import cached_property
 
-from aiohttp import ClientSession
-from ldap3 import Connection as Ldap3Connection
-from ldap3.utils.ntlm import NtlmClient
-
-from ntlm.messages.challenge import ChallengeMessage
-from ntlm.messages.negotiate import NegotiateMessage
-
-NTLM_PATTERN = re_compile('^NTLM (?P<ntlm_data>[^,]+).*$')
+from ntlm.structures.av_pair import AVPairSequence, AvId, AvFlags, SingleHostData, EOLAVPair
 
 
-# TODO: Make a custom exception for the case when the regex search fails.
-async def retrieve_http_ntlm_challenge(client_session: ClientSession, url: str) -> ChallengeMessage:
+class NTLMTargetInformation:
+    def __init__(self, av_pairs: AVPairSequence):
+        self._av_pairs: AVPairSequence = av_pairs
 
-    negotiate_message = NegotiateMessage.make_ntlm_v2_negotiate()
-    # TODO: I want this flag to be set by default in `NegotiateMessage.make_ntlm_v2_negotiate`, but I need to add the
-    #   actual support for that.
-    negotiate_message.negotiate_flags.negotiate_extended_sessionsecurity = True
-
-    request_options = dict(
-        url=url,
-        method='GET',
-        headers={'Authorization': f'NTLM {b64encode(s=bytes(negotiate_message)).decode()}'},
-        verify_ssl=False
-    )
-    async with client_session.request(**request_options) as response:
-        return ChallengeMessage.from_bytes(
-            data=b64decode(
-                s=NTLM_PATTERN.search(response.headers.get('WWW-Authenticate')).groupdict()['ntlm_data'].encode()
-            )
+    def _get_property_value(self, av_id: AvId) -> Optional[Union[str, datetime, AvFlags, bytes, SingleHostData]]:
+        av_pair: Optional[None] = next(
+            (
+                av_pair
+                for av_pair in self._av_pairs
+                if av_pair.AV_ID is av_id
+            ),
+            None
         )
 
+        return av_pair.get_value() if av_pair is not None else None
 
-def retrieve_ad_ldap_ntlm_challenge(ldap_connection: Ldap3Connection) -> ChallengeMessage:
-    """
-    Extract the NTLM challenge message from NTLM authentication procedure over LDAP.
+    @cached_property
+    def nb_domain_name(self) -> Optional[str]:
+        return self._get_property_value(av_id=AvId.MsvAvNbDomainName)
 
-    :param ldap_connection: An unbound LDAP connection.
-    :return: An NTLM challenge message resulting from an attempt to bind.
-    """
-    # Intercept the parsing of the LDAP server’s NTLM `CHALLENGE_MESSAGE` and extract the domain name from the
-    # `DnsDomainName` value (FQDN of the domain) of the `TargetInfo` field.
+    @cached_property
+    def dns_computer_name(self) -> Optional[str]:
+        return self._get_property_value(av_id=AvId.MsvAvDnsComputerName)
 
-    challenge_message = None
+    @cached_property
+    def dns_domain_name(self) -> Optional[str]:
+        return self._get_property_value(av_id=AvId.MsvAvDnsDomainName)
 
-    def parse_challenge_message_wrapper(self, data: bytes) -> None:
-        nonlocal challenge_message
-        challenge_message = ChallengeMessage.from_bytes(data=data)
+    @cached_property
+    def dns_tree_name(self) -> Optional[str]:
+        return self._get_property_value(av_id=AvId.MsvAvDnsTreeName)
 
-    @contextmanager
-    def substitute_parse_challenge_message():
-        parse_challenge_message_backup = NtlmClient.parse_challenge_message
-        NtlmClient.parse_challenge_message = parse_challenge_message_wrapper
-        yield
-        NtlmClient.parse_challenge_message = parse_challenge_message_backup
+    @cached_property
+    def timestamp(self) -> Optional[datetime]:
+        return self._get_property_value(av_id=AvId.MsvAvTimestamp)
 
-    with substitute_parse_challenge_message():
-        ldap_connection.bind()
-        return challenge_message
+    @cached_property
+    def flags(self) -> Optional[AvFlags]:
+        return self._get_property_value(av_id=AvId.MsvAvFlags)
 
-# TODO: I should add something that returns either the AV pairs, or probably better a "target information" dataclass.
+    @cached_property
+    def channel_bindings(self) -> Optional[bytes]:
+        return self._get_property_value(av_id=AvId.MsvChannelBindings)
+
+    @cached_property
+    def single_host_data(self) -> Optional[SingleHostData]:
+        return self._get_property_value(av_id=AvId.MsvAvSingleHost)
+
+    def __str__(self) -> str:
+        return '\n'.join(sorted([
+            f'{av_pair.LABEL}: {av_pair.get_value()}'
+            for av_pair in self._av_pairs
+            if not isinstance(av_pair, EOLAVPair)
+        ]))
