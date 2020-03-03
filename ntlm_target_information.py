@@ -11,6 +11,7 @@ from aiohttp import ClientSession, ClientTimeout
 from ldap3 import Connection as Ldap3Connection, Server as Ldap3Server, NTLM as Ldap3NTLM
 
 from ntlm_target_information import NTLMTargetInformation
+from ntlm_target_information.exceptions import ExtractionError
 from ntlm_target_information.extraction.http import retrieve_http_ntlm_challenge
 from ntlm_target_information.extraction.ldap import retrieve_ad_ldap_ntlm_challenge
 
@@ -81,8 +82,9 @@ async def ntlm_target_information(mode: TargetInformationMode, url: str, timeout
             connection=Ldap3Connection(
                 server=Ldap3Server(host=url),
                 authentication=Ldap3NTLM,
-                user='PHONY\\PHONY',
-                password='PHONY',
+                read_only=True,
+                user='\\',
+                password=' ',
             )
         ).target_info
     else:
@@ -99,7 +101,7 @@ async def main() -> NTLMTargetInformation:
 if __name__ == '__main__':
     try:
         print(asyncio_run(main()))
-    except Exception as e:
+    except ExtractionError as e:
         print(e, file=stderr)
         exit(1)
 

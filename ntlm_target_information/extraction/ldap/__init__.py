@@ -30,5 +30,9 @@ def retrieve_ad_ldap_ntlm_challenge(connection: Ldap3Connection) -> ChallengeMes
         NtlmClient.parse_challenge_message = parse_challenge_message_backup
 
     with substitute_parse_challenge_message():
-        connection.bind()
+        try:
+            connection.bind()
+        except Exception:
+            pass
+
         return challenge_message
