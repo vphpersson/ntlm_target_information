@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser, Action, Namespace
-from enum import Enum, auto
+from enum import Enum
 from asyncio import run as asyncio_run
 from sys import stderr
-from typing import Optional, Set, Any
-from urllib.parse import urlparse, ParseResult
+from typing import Optional, Any
+from urllib.parse import urlparse
 
 from aiohttp import ClientSession, ClientTimeout
 from ldap3 import Connection as Ldap3Connection, Server as Ldap3Server, NTLM as Ldap3NTLM
@@ -16,14 +16,42 @@ from ntlm_target_information.extraction.http import retrieve_http_ntlm_challenge
 from ntlm_target_information.extraction.ldap import retrieve_ad_ldap_ntlm_challenge
 
 
-class TargetInformationMode(Enum):
-    HTTP = auto()
-    LDAP = auto()
+class SupportedScheme(Enum):
+    HTTP = 'http'
+    HTTPS = 'https'
+    LDAP = 'ldap'
+    LDAPS = 'ldaps'
 
 
-HTTP_SCHEMES: Set[str] = {'http', 'https'}
-LDAP_SCHEMES: Set[str] = {'ldap', 'ldaps'}
-SUPPORTED_SCHEMES: Set[str] = HTTP_SCHEMES | LDAP_SCHEMES
+async def ntlm_target_information(url: str, timeout: float = 5.0) -> NTLMTargetInformation:
+    """
+    Retrieve information about a target from metadata in an NTLM challenge message.
+
+    :param url: The URL of a target endpoint that supports NTLM authentication.
+    :param timeout: The number of seconds to wait before timing out a network request.
+    :return: Information about the target contained in an NTLM challenge message.
+    """
+
+    scheme: SupportedScheme = SupportedScheme(urlparse(url=url).scheme.lower())
+
+    if scheme in {SupportedScheme.HTTP, SupportedScheme.HTTPS}:
+        async with ClientSession(timeout=ClientTimeout(total=timeout)) as client_session:
+            av_pairs = (await retrieve_http_ntlm_challenge(client_session=client_session, url=url)).target_info
+    elif scheme in {SupportedScheme.LDAP, SupportedScheme.LDAPS}:
+        # TODO: Add timeout?
+        av_pairs = retrieve_ad_ldap_ntlm_challenge(
+            connection=Ldap3Connection(
+                server=Ldap3Server(host=url),
+                authentication=Ldap3NTLM,
+                read_only=True,
+                user='\\',
+                password=' ',
+            )
+        ).target_info
+    else:
+        raise ValueError(f'Unsupported scheme: {scheme}')
+
+    return NTLMTargetInformation(av_pairs=av_pairs)
 
 
 class ParseURLAction(Action):
@@ -35,16 +63,25 @@ class ParseURLAction(Action):
         url: Any,
         _: Optional[str] = None
     ) -> None:
-        parsed_url: ParseResult = urlparse(url=url)
+        """
+        Handle the parsing of the URL argument.
 
-        scheme: str = parsed_url.scheme.lower()
-        if scheme in {'http', 'https'}:
-            setattr(namespace, 'mode', TargetInformationMode.HTTP)
-        elif scheme in {'ldap', 'ldaps'}:
-            setattr(namespace, 'mode', TargetInformationMode.LDAP)
-        else:
+        :param parser: The argument parser on which the action is registered.
+        :param namespace: The namespace that will contain the parsed arguments.
+        :param url: The value of the URL argument passed by the user.
+        :return: None
+        """
+
+        scheme: str = urlparse(url=url).scheme.lower()
+
+        try:
+            SupportedScheme(value=scheme)
+        except ValueError:
             return parser.error(
-                message=f'Unsupported scheme: "{scheme}". Supported schemes: {", ".join(sorted(SUPPORTED_SCHEMES))}.'
+                message=(
+                    f'Unsupported scheme: "{scheme}". '
+                    f'Supported schemes: {", ".join(sorted(mode.value for mode in SupportedScheme))}.'
+                )
             )
 
         setattr(namespace, 'url', url)
@@ -72,30 +109,9 @@ def get_parser() -> ArgumentParser:
     return parser
 
 
-async def ntlm_target_information(mode: TargetInformationMode, url: str, timeout: float = 5.0) -> NTLMTargetInformation:
-
-    if mode is TargetInformationMode.HTTP:
-        async with ClientSession(timeout=ClientTimeout(total=timeout)) as client_session:
-            av_pairs = (await retrieve_http_ntlm_challenge(client_session=client_session, url=url)).target_info
-    elif mode is TargetInformationMode.LDAP:
-        av_pairs = retrieve_ad_ldap_ntlm_challenge(
-            connection=Ldap3Connection(
-                server=Ldap3Server(host=url),
-                authentication=Ldap3NTLM,
-                read_only=True,
-                user='\\',
-                password=' ',
-            )
-        ).target_info
-    else:
-        raise ValueError(f'Unsupported mode: {mode}')
-
-    return NTLMTargetInformation(av_pairs=av_pairs)
-
-
 async def main() -> NTLMTargetInformation:
     args: Namespace = get_parser().parse_args()
-    return await ntlm_target_information(mode=args.mode, url=args.url, timeout=args.timeout)
+    return await ntlm_target_information(url=args.url, timeout=args.timeout)
 
 
 if __name__ == '__main__':
