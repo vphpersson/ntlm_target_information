@@ -7,8 +7,9 @@ verify_ssl = true
 
 [packages]
 ntlm = {file = "https://github.com/vphpersson/ntlm/tarball/master"}
-aiohttp = "*"
+terminal-utils = {editable = true, git = "ssh://git@github.com/vphpersson/terminal_utils.git"}
 ldap3 = "*"
+httpx = "*"
 
 [requires]
-python_version = "3.8"
+python_version = "3.9"

@@ -20,7 +20,7 @@ def retrieve_ad_ldap_ntlm_challenge(connection: Ldap3Connection) -> ChallengeMes
 
     def parse_challenge_message_wrapper(self, data: bytes) -> None:
         nonlocal challenge_message
-        challenge_message = ChallengeMessage.from_bytes(data=data)
+        challenge_message = ChallengeMessage.from_bytes(buffer=data)
 
     @contextmanager
     def substitute_parse_challenge_message():
