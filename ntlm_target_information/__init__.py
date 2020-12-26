@@ -1,11 +1,22 @@
 from typing import Optional, Union
+from logging import getLogger
 from datetime import datetime
 from functools import cached_property
+from enum import Enum
+from urllib.parse import urlparse
 
-from ntlm.structures.av_pair import AVPairSequence, AvId, AvFlags, SingleHostData, EOLAVPair
+from httpx import AsyncClient
+from ldap3 import Connection as Ldap3Connection, Server as Ldap3Server, NTLM as Ldap3NTLM
+from ntlm.structures.av_pairs import AvId
+from ntlm.structures.av_pair_sequence import AVPairSequence
+from ntlm.structures.av_pairs.eol import EOLAVPair
+from ntlm.structures.single_host_data import SingleHostData
+from ntlm.structures.av_pairs.flags import AvFlags
 
-# TODO: Consider whether this should be here or in the NTLM library, replacing the `ChallengeMessage.target_info`.
-# TODO: Consider whether to use `cached_property`. The provided `AVPairSequence` is mutable.
+from ntlm_target_information.extraction.http import retrieve_http_ntlm_challenge
+from ntlm_target_information.extraction.ldap import retrieve_ad_ldap_ntlm_challenge
+
+LOG = getLogger(__name__)
 
 
 class NTLMTargetInformation:
@@ -13,16 +24,14 @@ class NTLMTargetInformation:
         self._av_pairs: AVPairSequence = av_pairs
 
     def _get_property_value(self, av_id: AvId) -> Optional[Union[str, datetime, AvFlags, bytes, SingleHostData]]:
-        av_pair: Optional[None] = next(
-            (
+        try:
+            return next(
                 av_pair
                 for av_pair in self._av_pairs
                 if av_pair.AV_ID is av_id
-            ),
-            None
-        )
-
-        return av_pair.get_value() if av_pair is not None else None
+            ).get_value()
+        except StopIteration:
+            return None
 
     @cached_property
     def nb_domain_name(self) -> Optional[str]:
@@ -62,3 +71,40 @@ class NTLMTargetInformation:
             for av_pair in self._av_pairs
             if not isinstance(av_pair, EOLAVPair)
         ]))
+
+
+class SupportedScheme(Enum):
+    HTTP = 'http'
+    HTTPS = 'https'
+    LDAP = 'ldap'
+    LDAPS = 'ldaps'
+
+
+async def ntlm_target_information(url: str, timeout: float = 5.0) -> NTLMTargetInformation:
+    """
+    Retrieve information about a target from metadata in an NTLM challenge message.
+
+    :param url: The URL of a target endpoint that supports NTLM authentication.
+    :param timeout: The number of seconds to wait before timing out a network request.
+    :return: Information about the target contained in an NTLM challenge message.
+    """
+
+    scheme: SupportedScheme = SupportedScheme(urlparse(url=url).scheme.lower())
+
+    if scheme in {SupportedScheme.HTTP, SupportedScheme.HTTPS}:
+        async with AsyncClient(timeout=timeout, verify=False) as http_client:
+            av_pairs = (await retrieve_http_ntlm_challenge(http_client=http_client, url=url)).target_info
+    elif scheme in {SupportedScheme.LDAP, SupportedScheme.LDAPS}:
+        av_pairs = retrieve_ad_ldap_ntlm_challenge(
+            connection=Ldap3Connection(
+                server=Ldap3Server(host=url),
+                authentication=Ldap3NTLM,
+                read_only=True,
+                user='\\',
+                password=' ',
+            )
+        ).target_info
+    else:
+        raise ValueError(f'Unsupported scheme: {scheme}')
+
+    return NTLMTargetInformation(av_pairs=av_pairs)
