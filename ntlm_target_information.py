@@ -18,14 +18,14 @@ class NTLMTargetInformationArgumentParser(ArgumentParser):
 
         self.add_argument(
             'url',
-            help='The URL of an endpoint that supports NTLM authentication.',
+            help='The URL of an endpoint that supports NTLM authentication, whose server to obtain information about.',
             type=str,
             action=self.ParseURLAction
         )
 
         self.add_argument(
             '-w', '--timeout',
-            help='The number of seconds to wait before timing out.',
+            help='The number of seconds to wait before timing out when trying to connect to the endpoint.',
             type=int,
             default=5
         )
