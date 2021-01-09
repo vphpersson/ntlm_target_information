@@ -1,0 +1,5 @@
+ldap3
+httpx
+-e git+ssh://git@github.com/vphpersson/ntlm.git#egg=ntlm
+-e git+ssh://git@github.com/vphpersson/terminal_utils.git#egg=terminal_utils
+-e git+ssh://git@github.com/vphpersson/pyutils.git#egg=pyutils
