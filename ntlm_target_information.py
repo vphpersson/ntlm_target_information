@@ -7,6 +7,7 @@ from typing import Optional, Any
 from urllib.parse import urlparse
 
 from terminal_utils.log_handlers import ColoredLogHandler
+from pyutils.my_string import text_align_delimiter
 
 from ntlm_target_information import LOG, SupportedScheme, ntlm_target_information
 
@@ -70,7 +71,10 @@ async def main():
 
     try:
         print(
-            await ntlm_target_information(url=args.url, timeout=args.timeout)
+            text_align_delimiter(
+                text=str(await ntlm_target_information(url=args.url, timeout=args.timeout)),
+                delimiter=': '
+            )
         )
     except:
         LOG.exception('Unexpected error.')
