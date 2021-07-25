@@ -4,8 +4,9 @@ from datetime import datetime
 from functools import cached_property
 from enum import Enum
 from urllib.parse import urlparse
+from ssl import OP_NO_TLSv1
 
-from httpx import AsyncClient
+from httpx import AsyncClient, create_ssl_context
 from ldap3 import Connection as Ldap3Connection, Server as Ldap3Server, NTLM as Ldap3NTLM
 from ntlm.structures.av_pairs import AvId
 from ntlm.structures.av_pair_sequence import AVPairSequence
@@ -92,7 +93,9 @@ async def ntlm_target_information(url: str, timeout: float = 5.0) -> NTLMTargetI
     scheme: SupportedScheme = SupportedScheme(urlparse(url=url).scheme.lower())
 
     if scheme in {SupportedScheme.HTTP, SupportedScheme.HTTPS}:
-        async with AsyncClient(timeout=timeout, verify=False) as http_client:
+        ssl_context = create_ssl_context(verify=False)
+        ssl_context.options ^= OP_NO_TLSv1
+        async with AsyncClient(timeout=timeout, verify=ssl_context) as http_client:
             av_pairs = (await retrieve_http_ntlm_challenge(http_client=http_client, url=url)).target_info
     elif scheme in {SupportedScheme.LDAP, SupportedScheme.LDAPS}:
         av_pairs = retrieve_ad_ldap_ntlm_challenge(
