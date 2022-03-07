@@ -12,10 +12,12 @@ Utilizes my [ntlm](https://github.com/vphpersson/ntlm) library!
 $ ./ntlm_target_information.py --help
 usage: ntlm_target_information.py [-h] [-w TIMEOUT] url
 
+Output metadata about a server contained in an NTLM challenge message yielded from a specified endpoint.
+
 positional arguments:
   url                   The URL of an endpoint that supports NTLM authentication, whose server to obtain information about.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -w TIMEOUT, --timeout TIMEOUT
                         The number of seconds to wait before timing out when trying to connect to the endpoint.
