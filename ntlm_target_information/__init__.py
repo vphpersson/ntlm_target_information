@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional
 from logging import getLogger
 from datetime import datetime
 from functools import cached_property
@@ -24,13 +24,9 @@ class NTLMTargetInformation:
     def __init__(self, av_pairs: AVPairSequence):
         self._av_pairs: AVPairSequence = av_pairs
 
-    def _get_property_value(self, av_id: AvId) -> Optional[Union[str, datetime, AvFlags, bytes, SingleHostData]]:
+    def _get_property_value(self, av_id: AvId) -> Optional[str | datetime | AvFlags | bytes | SingleHostData]:
         try:
-            return next(
-                av_pair
-                for av_pair in self._av_pairs
-                if av_pair.AV_ID is av_id
-            ).get_value()
+            return next(av_pair for av_pair in self._av_pairs if av_pair.AV_ID is av_id).get_value()
         except StopIteration:
             return None
 
