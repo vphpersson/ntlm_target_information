@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 from asyncio import run as asyncio_run
 from typing import Type
